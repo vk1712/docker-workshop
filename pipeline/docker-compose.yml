@@ -1,0 +1,61 @@
+services:
+  pgdatabase:
+    image: postgres:18
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=ny_taxi
+    volumes:
+      - "ny_taxi_postgres_data:/var/lib/postgresql"
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=password
+    volumes:
+      - "pgadmin_data:/var/lib/pgadmin"
+    ports:
+      - "8085:80"
+    depends_on:
+      - pgdatabase
+
+  # this is using Dockerfile and building image locally by docker build -t taxi_ingest:v001 .
+  ingest_data:
+    image: taxi_ingest:v001
+    depends_on:
+      - pgdatabase
+    command: >
+      --pg-user=root
+      --pg-pass=password
+      --pg-host=pgdatabase
+      --pg-port=5432
+      --pg-db=ny_taxi
+      --target-table=yellow_taxi_data
+
+  # this only runs when - Dockerfile and ingest_data.py is in a folder and context reads it
+  # ingest_data:
+  #   build:
+  #     context: .ingest
+  #     dockerfile: Dockerfile
+  #   depends_on:
+  #     - pgdatabase
+  #   command: >
+  #     PG_USER: root
+  #     PG_PASS: password
+  #     PG_HOST: pgdatabase
+  #     PG_PORT: 5432
+  #     PG_DB: ny_taxi
+  #     TARGET_TABLE: yellow_taxi_data
+
+
+volumes:
+  ny_taxi_postgres_data:
+  pgadmin_data:
+
+
+# the network is not required becasuse using docker compose - all the services will be in same netork by defualt
+# networks:
+  # pg-network:
