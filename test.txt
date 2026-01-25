@@ -1,0 +1,76 @@
+docker run -it --rm \
+-e POSTGRES_USER="root" \
+-e POSTGRES_PASSWORD="password" \
+-e POSTGRES_DB="ny_taxi" \
+-v ny_taxi_postgres_data:/var/lib/postgresql \
+-p 5432:5432 \
+--network=pg-network \
+--name pgdatabase \
+postgres:18
+
+
+python pipeline/ingest_data.py \
+--pg-user=root \
+--pg-pass=password \
+--pg-host=localhost \
+--pg-port=5432 \
+--pg-db=ny_taxi \
+--target-table=yellow_taxi_data
+
+
+docker run -it --rm \
+--network=pg-network \
+--name optional_ingest \
+taxi_ingest:v001 \
+--pg-user=root \
+--pg-pass=password \
+--pg-host=pgdatabase \
+--pg-port=5432 \
+--pg-db=ny_taxi \
+--target-table=yellow_taxi_data
+
+
+docker run -it --rm \
+-e PGADMIN_DEFAULT_EMAIL="admin@admin.com" \
+-e PGADMIN_DEFAULT_PASSWORD="password" \
+-v pgadmin_data:/var/lib/pgadmin \
+-p 8085:80 \
+--network=pg-network \
+--name pgadmin \
+dpage/pgadmin4:latest
+
+
+select count(*)
+from green_taxi_data g
+where g.lpep_pickup_datetime >= TIMESTAMP '2025-11-01' AND 
+	g.lpep_pickup_datetime < TIMESTAMP '2025-12-01' AND
+	g.trip_distance <= 1;
+
+
+select DATE(g.lpep_pickup_datetime) as datee, SUM(g.trip_distance) as distance
+from green_taxi_data g
+where g.trip_distance < 100
+GROUP BY DATE(g.lpep_pickup_datetime)
+ORDER BY distance desc
+LIMIT 1;
+
+
+select zp."Zone", SUM(g.total_amount)
+from green_taxi_data g
+	JOIN green_zones zp ON g."PULocationID" = zp."LocationID"
+WHERE DATE(g.lpep_pickup_datetime) = '2025-11-18'
+GROUP BY zp."Zone"
+order by SUM(g.total_amount) desc
+limit 1;
+
+
+select zd."Zone", g.tip_amount as tip
+from green_taxi_data g
+	JOIN green_zones zp ON g."PULocationID" = zp."LocationID"
+	JOIN green_zones zd ON g."DOLocationID" = zd."LocationID"
+WHERE zp."Zone" = 'East Harlem North' AND 
+	g.lpep_pickup_datetime >= TIMESTAMP '2025-11-01' AND
+		g.lpep_pickup_datetime < TIMESTAMP '2025-12-01'
+-- GROUP BY zd."Zone"
+order by tip desc
+limit 1;
